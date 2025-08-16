@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use ureq::Agent;
+
 use crate::jose::{Advertisment, Jwk, JwkSet, KeyMeta, ProvisionedData};
 use crate::{EncryptionKey, Result};
 
@@ -12,6 +14,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 #[must_use]
 #[derive(Clone, Debug)]
 pub struct TangClient {
+    agent: Agent,
     url: String,
     timeout: Duration,
 }
@@ -19,12 +22,17 @@ pub struct TangClient {
 impl TangClient {
     /// Create a new client. If timeout is not specified, it will default to 120s.
     pub fn new(url: &str, timeout: Option<Duration>) -> Self {
+        Self::new_with_agent(Agent::new(), url, timeout)
+    }
+
+    pub fn new_with_agent(agent: Agent, url: &str, timeout: Option<Duration>) -> Self {
         let url = if url.starts_with("http") {
             url.to_owned()
         } else {
             format!("http://{url}")
         };
         Self {
+            agent,
             url,
             timeout: timeout.unwrap_or(DEFAULT_TIMEOUT),
         }
@@ -62,7 +70,12 @@ impl TangClient {
     fn fetch_keys(&self, thumbprint: Option<&str>) -> Result<(JwkSet, Box<str>)> {
         let url = format!("{}/adv/{}", &self.url, thumbprint.unwrap_or(""));
         tracing::debug!(url, "fetching advertisment");
-        let adv: Advertisment = ureq::get(&url).timeout(self.timeout).call()?.into_json()?;
+        let adv: Advertisment = self
+            .agent
+            .get(&url)
+            .timeout(self.timeout)
+            .call()?
+            .into_json()?;
         adv.validate_into_keys(thumbprint)
     }
 
@@ -70,7 +83,8 @@ impl TangClient {
     fn fetch_recovery_key(&self, kid: &str, x_pub_jwk: &Jwk) -> Result<Jwk> {
         let url = format!("{}/rec/{kid}", &self.url);
         tracing::debug!(url, "requesting recovery key");
-        ureq::post(&url)
+        self.agent
+            .post(&url)
             .timeout(self.timeout)
             .set("Content-Type", "application/jwk+json")
             .send_json(x_pub_jwk)?
