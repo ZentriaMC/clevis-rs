@@ -5,6 +5,13 @@ use std::io::stdin;
 use std::io::{BufRead, Read};
 
 use clap::{Args, Parser, Subcommand};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{
+    fmt::{self, format::FmtSpan},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
+};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -40,7 +47,20 @@ struct EncryptArgs {
 }
 
 fn main() {
-    env_logger::init();
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                .with_writer(|| Box::new(std::io::stderr()))
+                .with_target(true)
+                .with_span_events(FmtSpan::CLOSE),
+        )
+        .with(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
+
     let cli = Cli::parse();
 
     match cli.command {

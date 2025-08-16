@@ -61,7 +61,7 @@ impl TangClient {
     /// Advertisment step that gets all public keys. Verifies the signature
     fn fetch_keys(&self, thumbprint: Option<&str>) -> Result<(JwkSet, Box<str>)> {
         let url = format!("{}/adv/{}", &self.url, thumbprint.unwrap_or(""));
-        log::debug!("fetching advertisment from '{url}'");
+        tracing::debug!(url, "fetching advertisment");
         let adv: Advertisment = ureq::get(&url).timeout(self.timeout).call()?.into_json()?;
         adv.validate_into_keys(thumbprint)
     }
@@ -69,7 +69,7 @@ impl TangClient {
     /// Perform the POST request that requests serverside key exchange to produce a recovery key
     fn fetch_recovery_key(&self, kid: &str, x_pub_jwk: &Jwk) -> Result<Jwk> {
         let url = format!("{}/rec/{kid}", &self.url);
-        log::debug!("requesting recovery key from '{url}'");
+        tracing::debug!(url, "requesting recovery key");
         ureq::post(&url)
             .timeout(self.timeout)
             .set("Content-Type", "application/jwk+json")
